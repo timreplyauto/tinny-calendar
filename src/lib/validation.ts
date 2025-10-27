@@ -72,5 +72,6 @@ export function validateAIPrompt(prompt: string): { valid: boolean; error?: stri
 
 // Prevent SQL injection in search queries
 export function sanitizeSearchQuery(query: string): string {
-  return query.replace(/[';--]/g, '').trim().slice(0, 100)
+  // Remove potentially dangerous characters
+  return query.replace(/[';"\-\\]/g, '').trim().slice(0, 100)
 }
