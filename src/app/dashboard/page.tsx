@@ -36,8 +36,8 @@ export default function DashboardPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
   
-  const [currentMonth, setCurrentMonth] = useState(9)
-  const [currentYear, setCurrentYear] = useState(2025)
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
 
   useEffect(() => {
     fetchEvents()
@@ -185,56 +185,60 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">TINNY</h1>
-          <div className="flex items-center space-x-4">
+      {/* Mobile-optimized header */}
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">TINNY</h1>
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <button 
               onClick={() => setIsSmartAIOpen(true)}
-              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition"
+              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition text-sm sm:text-base"
             >
-              ✨ Smart AI
+              ✨ AI
             </button>
             <button 
               onClick={handleNewEventClick}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+              className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-sm sm:text-base"
             >
-              + New Event
+              + Event
             </button>
             <UserMenu />
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+          {/* Sidebar - collapsible on mobile */}
           <div className="lg:col-span-1 space-y-4">
+            {/* Navigation */}
             <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3">Navigation</h2>
+              <h2 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">Navigation</h2>
               <nav className="space-y-2">
-                <a href="/dashboard" className="block px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium">
+                <a href="/dashboard" className="block px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm">
                   Calendar
                 </a>
-                <a href="/dashboard/friends" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
+                <a href="/dashboard/friends" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
                   Friends
                 </a>
-                <a href="/dashboard/groups" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
+                <a href="/dashboard/groups" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
                   Groups
                 </a>
-                <a href="/dashboard/settings" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
+                <a href="/dashboard/settings" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
                   Settings
                 </a>
               </nav>
             </div>
 
+            {/* View Calendar */}
             <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3">View Calendar</h2>
+              <h2 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">View Calendar</h2>
               <button
                 onClick={() => {
                   setSelectedFriendId(null)
                   fetchEvents()
                 }}
-                className={`w-full text-left px-3 py-2 rounded-lg mb-2 ${
+                className={`w-full text-left px-3 py-2 rounded-lg mb-2 text-sm ${
                   !selectedFriendId ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
                 }`}
               >
@@ -242,46 +246,53 @@ export default function DashboardPage() {
               </button>
               <div className="border-t border-gray-200 my-2"></div>
               <p className="text-xs text-gray-500 mb-2">Friends' Calendars:</p>
-              {friends.length === 0 ? (
-                <p className="text-xs text-gray-400 px-3 py-2">No friends yet</p>
-              ) : (
-                friends.map(friend => (
-                  <button
-                    key={friend.friend_id}
-                    onClick={() => {
-                      setSelectedFriendId(friend.friend_id)
-                      fetchEvents()
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded-lg mb-2 text-sm ${
-                      selectedFriendId === friend.friend_id ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    👤 {friend.profiles?.full_name || friend.profiles?.username || 'Unknown'}
-                  </button>
-                ))
-              )}
+              <div className="max-h-40 overflow-y-auto">
+                {friends.length === 0 ? (
+                  <p className="text-xs text-gray-400 px-3 py-2">No friends yet</p>
+                ) : (
+                  friends.map(friend => (
+                    <button
+                      key={friend.friend_id}
+                      onClick={() => {
+                        setSelectedFriendId(friend.friend_id)
+                        fetchEvents()
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg mb-2 text-sm ${
+                        selectedFriendId === friend.friend_id ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      👤 {friend.profiles?.full_name || friend.profiles?.username || 'Unknown'}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
 
-            <AIAssistant onEventCreated={handleEventCreated} />
+            {/* AI Assistant - hidden on small screens */}
+            <div className="hidden lg:block">
+              <AIAssistant onEventCreated={handleEventCreated} />
+            </div>
           </div>
 
+          {/* Calendar */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
+            <div className="bg-white rounded-lg shadow p-3 sm:p-6">
+              {/* Calendar Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
                   {selectedFriendId 
                     ? `${friends.find(f => f.friend_id === selectedFriendId)?.profiles?.full_name}'s Calendar`
                     : `${getMonthName(currentMonth)} ${currentYear}`
                   }
                 </h2>
-                <div className="flex space-x-2">
-                  <button onClick={goToToday} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                <div className="flex space-x-2 w-full sm:w-auto">
+                  <button onClick={goToToday} className="flex-1 sm:flex-none px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
                     Today
                   </button>
-                  <button onClick={goToPreviousMonth} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button onClick={goToPreviousMonth} className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
                     ←
                   </button>
-                  <button onClick={goToNextMonth} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  <button onClick={goToNextMonth} className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
                     →
                   </button>
                 </div>
@@ -290,13 +301,15 @@ export default function DashboardPage() {
               {isLoading ? (
                 <div className="text-center py-12 text-gray-500">Loading events...</div>
               ) : (
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                  {/* Day headers */}
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
+                    <div key={day} className="text-center text-xs sm:text-sm font-semibold text-gray-600 py-2">
                       {day}
                     </div>
                   ))}
                   
+                  {/* Calendar days */}
                   {Array.from({ length: totalCells }, (_, i) => {
                     const day = i - firstDay + 1;
                     const isValidDay = day > 0 && day <= daysInMonth
@@ -307,15 +320,15 @@ export default function DashboardPage() {
                       <div
                         key={i}
                         onClick={() => isValidDay && !selectedFriendId && handleDayClick(day)}
-                        className={`min-h-[100px] border border-gray-200 rounded-lg p-2 ${
+                        className={`min-h-[80px] sm:min-h-[100px] border border-gray-200 rounded-lg p-1 sm:p-2 ${
                           !isValidDay ? 'bg-gray-50 text-gray-400' : 
                           selectedFriendId ? 'hover:bg-gray-50' : 'hover:bg-blue-50 cursor-pointer'
                         } ${isTodayDate ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-200' : ''}`}
                       >
-                        <div className={`text-sm font-medium mb-1 ${isTodayDate ? 'text-blue-600 font-bold' : ''}`}>
+                        <div className={`text-xs sm:text-sm font-medium mb-1 ${isTodayDate ? 'text-blue-600 font-bold' : ''}`}>
                           {isValidDay ? day : ''}
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1 overflow-y-auto max-h-[60px] sm:max-h-[80px]">
                           {dayEvents.map(event => {
                             const eventTime = new Date(event.start_time)
                             const isPending = event.participation_status === 'pending'
@@ -329,13 +342,21 @@ export default function DashboardPage() {
                                   className={`text-xs p-1 rounded truncate cursor-pointer ${
                                     isPending ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
                                   } hover:bg-opacity-80`}
-                                  title={event.title}
-                                >
-                                  {eventTime.toLocaleTimeString('en-US', {
+                                  title={`${eventTime.toLocaleTimeString('en-US', {
                                     hour: 'numeric',
                                     minute: '2-digit'
-                                  })} {event.title}
-                                  {isPending && ' 🔔'}
+                                  })} ${event.title}`}
+                                >
+                                  <div className="font-medium">
+                                    {eventTime.toLocaleTimeString('en-US', {
+                                      hour: 'numeric',
+                                      minute: '2-digit'
+                                    })}
+                                  </div>
+                                  <div className="truncate">
+                                    {event.title}
+                                    {isPending && ' 🔔'}
+                                  </div>
                                 </div>
                                 {isPending && !selectedFriendId && (
                                   <div className="flex gap-1">
