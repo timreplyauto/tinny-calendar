@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const [isSmartAIOpen, setIsSmartAIOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+  const [showSidebar, setShowSidebar] = useState(false)
   
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
@@ -83,7 +84,6 @@ export default function DashboardPage() {
       })
 
       if (response.ok) {
-        alert(`Event ${status}!`)
         fetchEvents()
       }
     } catch (error) {
@@ -159,7 +159,7 @@ export default function DashboardPage() {
   }
 
   const handleDayClick = (day: number) => {
-    if (day > 0) {
+    if (day > 0 && !selectedFriendId) {
       const date = new Date(currentYear, currentMonth, day, 9, 0)
       setSelectedDate(date)
       setSelectedEvent(null)
@@ -184,214 +184,291 @@ export default function DashboardPage() {
   const totalCells = Math.ceil((daysInMonth + firstDay) / 7) * 7
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile-optimized header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">TINNY</h1>
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <button 
-              onClick={() => setIsSmartAIOpen(true)}
-              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition text-sm sm:text-base"
+    <div className="min-h-screen bg-white">
+      {/* iOS-style Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="p-2 hover:bg-gray-100 rounded-full active:bg-gray-200 transition-colors"
             >
-              ✨ AI
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
-            <button 
-              onClick={handleNewEventClick}
-              className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-sm sm:text-base"
-            >
-              + Event
-            </button>
-            <UserMenu />
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setIsSmartAIOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-full font-semibold text-sm active:bg-blue-700 transition-colors"
+              >
+                ✨ AI
+              </button>
+              <button 
+                onClick={handleNewEventClick}
+                className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl active:bg-blue-700 transition-colors"
+              >
+                +
+              </button>
+            </div>
           </div>
+          
+          {/* Month/Year and Navigation */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {getMonthName(currentMonth)}
+            </h1>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={goToToday} 
+                className="px-3 py-1.5 bg-gray-100 rounded-full text-sm font-medium text-gray-700 active:bg-gray-200"
+              >
+                Today
+              </button>
+              <button 
+                onClick={goToPreviousMonth} 
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button 
+                onClick={goToNextMonth} 
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-500 mt-1">{currentYear}</p>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
-          {/* Sidebar - collapsible on mobile */}
-          <div className="lg:col-span-1 space-y-4">
-            {/* Navigation */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">Navigation</h2>
-              <nav className="space-y-2">
-                <a href="/dashboard" className="block px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm">
-                  Calendar
+      {/* Sidebar Overlay */}
+      {showSidebar && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-50"
+          onClick={() => setShowSidebar(false)}
+        >
+          <div 
+            className="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Menu</h2>
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <nav className="space-y-2 mb-6">
+                <a href="/dashboard" className="block px-4 py-3 bg-blue-50 text-blue-600 rounded-xl font-medium">
+                  📅 Calendar
                 </a>
-                <a href="/dashboard/friends" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
-                  Friends
+                <a href="/dashboard/friends" className="block px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl">
+                  👥 Friends
                 </a>
-                <a href="/dashboard/groups" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
-                  Groups
+                <a href="/dashboard/groups" className="block px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl">
+                  👪 Groups
                 </a>
-                <a href="/dashboard/settings" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
-                  Settings
+                <a href="/dashboard/settings" className="block px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl">
+                  ⚙️ Settings
                 </a>
               </nav>
-            </div>
 
-            {/* View Calendar */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">View Calendar</h2>
-              <button
-                onClick={() => {
-                  setSelectedFriendId(null)
-                  fetchEvents()
-                }}
-                className={`w-full text-left px-3 py-2 rounded-lg mb-2 text-sm ${
-                  !selectedFriendId ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
-                }`}
-              >
-                📅 My Calendar
-              </button>
-              <div className="border-t border-gray-200 my-2"></div>
-              <p className="text-xs text-gray-500 mb-2">Friends' Calendars:</p>
-              <div className="max-h-40 overflow-y-auto">
-                {friends.length === 0 ? (
-                  <p className="text-xs text-gray-400 px-3 py-2">No friends yet</p>
-                ) : (
-                  friends.map(friend => (
-                    <button
-                      key={friend.friend_id}
-                      onClick={() => {
-                        setSelectedFriendId(friend.friend_id)
-                        fetchEvents()
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg mb-2 text-sm ${
-                        selectedFriendId === friend.friend_id ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      👤 {friend.profiles?.full_name || friend.profiles?.username || 'Unknown'}
-                    </button>
-                  ))
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2 px-4">Calendars</h3>
+                <button
+                  onClick={() => {
+                    setSelectedFriendId(null)
+                    setShowSidebar(false)
+                    fetchEvents()
+                  }}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl mb-1 ${
+                    !selectedFriendId ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  My Calendar
+                </button>
+                {friends.length > 0 && (
+                  <div className="mt-2 max-h-60 overflow-y-auto">
+                    {friends.map(friend => (
+                      <button
+                        key={friend.friend_id}
+                        onClick={() => {
+                          setSelectedFriendId(friend.friend_id)
+                          setShowSidebar(false)
+                          fetchEvents()
+                        }}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl mb-1 text-sm ${
+                          selectedFriendId === friend.friend_id ? 'bg-blue-50 text-blue-600 font-medium' : 'hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        {friend.profiles?.full_name || friend.profiles?.username || 'Unknown'}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
-
-            {/* AI Assistant - hidden on small screens */}
-            <div className="hidden lg:block">
-              <AIAssistant onEventCreated={handleEventCreated} />
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow p-3 sm:p-6">
-              {/* Calendar Header */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                  {selectedFriendId 
-                    ? `${friends.find(f => f.friend_id === selectedFriendId)?.profiles?.full_name}'s Calendar`
-                    : `${getMonthName(currentMonth)} ${currentYear}`
-                  }
-                </h2>
-                <div className="flex space-x-2 w-full sm:w-auto">
-                  <button onClick={goToToday} className="flex-1 sm:flex-none px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                    Today
-                  </button>
-                  <button onClick={goToPreviousMonth} className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                    ←
-                  </button>
-                  <button onClick={goToNextMonth} className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                    →
-                  </button>
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="text-center py-12 text-gray-500">Loading events...</div>
-              ) : (
-                <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                  {/* Day headers */}
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-xs sm:text-sm font-semibold text-gray-600 py-2">
-                      {day}
-                    </div>
-                  ))}
-                  
-                  {/* Calendar days */}
-                  {Array.from({ length: totalCells }, (_, i) => {
-                    const day = i - firstDay + 1;
-                    const isValidDay = day > 0 && day <= daysInMonth
-                    const dayEvents = isValidDay ? getEventsForDay(day) : []
-                    const isTodayDate = isValidDay && isToday(day)
-                    
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => isValidDay && !selectedFriendId && handleDayClick(day)}
-                        className={`min-h-[80px] sm:min-h-[100px] border border-gray-200 rounded-lg p-1 sm:p-2 ${
-                          !isValidDay ? 'bg-gray-50 text-gray-400' : 
-                          selectedFriendId ? 'hover:bg-gray-50' : 'hover:bg-blue-50 cursor-pointer'
-                        } ${isTodayDate ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-200' : ''}`}
-                      >
-                        <div className={`text-xs sm:text-sm font-medium mb-1 ${isTodayDate ? 'text-blue-600 font-bold' : ''}`}>
-                          {isValidDay ? day : ''}
-                        </div>
-                        <div className="space-y-1 overflow-y-auto max-h-[60px] sm:max-h-[80px]">
-                          {dayEvents.map(event => {
-                            const eventTime = new Date(event.start_time)
-                            const isPending = event.participation_status === 'pending'
-                            return (
-                              <div key={event.id} className="space-y-1">
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEventClick(event)
-                                  }}
-                                  className={`text-xs p-1 rounded truncate cursor-pointer ${
-                                    isPending ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
-                                  } hover:bg-opacity-80`}
-                                  title={`${eventTime.toLocaleTimeString('en-US', {
-                                    hour: 'numeric',
-                                    minute: '2-digit'
-                                  })} ${event.title}`}
-                                >
-                                  <div className="font-medium">
-                                    {eventTime.toLocaleTimeString('en-US', {
-                                      hour: 'numeric',
-                                      minute: '2-digit'
-                                    })}
-                                  </div>
-                                  <div className="truncate">
-                                    {event.title}
-                                    {isPending && ' 🔔'}
-                                  </div>
-                                </div>
-                                {isPending && !selectedFriendId && (
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRSVP(event.id, 'accepted')
-                                      }}
-                                      className="flex-1 text-xs bg-green-600 text-white px-1 py-0.5 rounded hover:bg-green-700"
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRSVP(event.id, 'declined')
-                                      }}
-                                      className="flex-1 text-xs bg-red-600 text-white px-1 py-0.5 rounded hover:bg-red-700"
-                                    >
-                                      ✗
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         </div>
+      )}
+
+      {/* Calendar Grid - Apple Style */}
+      <div className="px-2">
+        {isLoading ? (
+          <div className="text-center py-12 text-gray-500">Loading...</div>
+        ) : (
+          <div className="grid grid-cols-7 gap-0">
+            {/* Day headers */}
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+              <div key={i} className="text-center text-xs font-semibold text-gray-500 py-2">
+                {day}
+              </div>
+            ))}
+            
+            {/* Calendar days */}
+            {Array.from({ length: totalCells }, (_, i) => {
+              const day = i - firstDay + 1;
+              const isValidDay = day > 0 && day <= daysInMonth
+              const dayEvents = isValidDay ? getEventsForDay(day) : []
+              const isTodayDate = isValidDay && isToday(day)
+              
+              return (
+                <div
+                  key={i}
+                  onClick={() => isValidDay && handleDayClick(day)}
+                  className={`aspect-square p-1 ${
+                    !isValidDay ? 'bg-gray-50' : 
+                    isTodayDate ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  {isValidDay && (
+                    <div className={`h-full flex flex-col ${selectedFriendId ? '' : 'cursor-pointer active:bg-gray-100'} rounded-lg`}>
+                      <div className={`text-center mb-1 ${
+                        isTodayDate 
+                          ? 'w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto text-sm font-semibold' 
+                          : 'text-sm font-medium text-gray-900'
+                      }`}>
+                        {day}
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        {dayEvents.slice(0, 3).map((event, idx) => {
+                          const eventTime = new Date(event.start_time)
+                          const isPending = event.participation_status === 'pending'
+                          return (
+                            <div
+                              key={event.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEventClick(event)
+                              }}
+                              className={`w-full h-1.5 rounded-full mb-0.5 ${
+                                isPending ? 'bg-yellow-400' : 'bg-blue-500'
+                              }`}
+                            />
+                          )
+                        })}
+                        {dayEvents.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center mt-0.5">
+                            +{dayEvents.length - 3}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Today's Events List */}
+        {(() => {
+          const today = new Date()
+          const todayEvents = events.filter(event => {
+            const eventDate = new Date(event.start_time)
+            return eventDate.getDate() === today.getDate() &&
+                   eventDate.getMonth() === today.getMonth() &&
+                   eventDate.getFullYear() === today.getFullYear()
+          })
+
+          if (todayEvents.length > 0) {
+            return (
+              <div className="mt-6 px-2 pb-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-3 px-2">Today's Events</h2>
+                <div className="space-y-2">
+                  {todayEvents.map(event => {
+                    const eventTime = new Date(event.start_time)
+                    const isPending = event.participation_status === 'pending'
+                    return (
+                      <div
+                        key={event.id}
+                        onClick={() => handleEventClick(event)}
+                        className="bg-white border border-gray-200 rounded-2xl p-4 active:bg-gray-50"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <div className={`w-3 h-3 rounded-full ${isPending ? 'bg-yellow-400' : 'bg-blue-500'}`} />
+                              <p className="font-semibold text-gray-900">{event.title}</p>
+                            </div>
+                            <p className="text-sm text-gray-500">
+                              {eventTime.toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                            {event.location && (
+                              <p className="text-sm text-gray-500 mt-1">📍 {event.location}</p>
+                            )}
+                          </div>
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                        {isPending && !selectedFriendId && (
+                          <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRSVP(event.id, 'accepted')
+                              }}
+                              className="flex-1 py-2 bg-green-600 text-white rounded-xl font-semibold active:bg-green-700"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRSVP(event.id, 'declined')
+                              }}
+                              className="flex-1 py-2 bg-red-600 text-white rounded-xl font-semibold active:bg-red-700"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          }
+          return null
+        })()}
       </div>
 
       <EventModal 
