@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { isBiometricAvailable, registerBiometric, isBiometricEnabled, disableBiometric } from '@/lib/biometric'
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null)
@@ -13,6 +14,8 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -37,8 +40,46 @@ export default function SettingsPage() {
       }
     }
 
+    const checkBiometric = async () => {
+      const available = await isBiometricAvailable()
+      const enabled = isBiometricEnabled()
+      setBiometricAvailable(available)
+      setBiometricEnabled(enabled)
+    }
+
     fetchProfile()
+    checkBiometric()
   }, [router, supabase])
+
+  const handleEnableBiometric = async () => {
+    setIsLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const success = await registerBiometric(user.id, user.email || '')
+      
+      if (success) {
+        setBiometricEnabled(true)
+        setMessage('Face ID enabled successfully! 🎉')
+      } else {
+        setError('Failed to enable Face ID')
+      }
+    } catch (err) {
+      setError('Error enabling Face ID')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDisableBiometric = () => {
+    disableBiometric()
+    setBiometricEnabled(false)
+    setMessage('Face ID disabled')
+  }
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -111,6 +152,7 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      disableBiometric()
       await supabase.from('profiles').delete().eq('id', user.id)
       await supabase.auth.signOut()
       router.push('/')
@@ -154,6 +196,50 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Biometric Authentication Section */}
+        {biometricAvailable && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Face ID / Touch ID</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Use biometric authentication for quick and secure access
+            </p>
+
+            {biometricEnabled ? (
+              <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Face ID Enabled</p>
+                    <p className="text-sm text-gray-600">Quick login is active</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDisableBiometric}
+                  className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                >
+                  Disable
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleEnableBiometric}
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                </svg>
+                <span>{isLoading ? 'Enabling...' : 'Enable Face ID / Touch ID'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Rest of settings sections... */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-4">Profile Information</h3>
           <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -244,7 +330,7 @@ export default function SettingsPage() {
           </div>
 
           <p className="text-xs text-gray-500 mt-4">
-            💡 Calendar integration is coming soon! This will allow you to sync events between TINNY and your other calendars.
+            💡 Calendar integration is coming soon!
           </p>
         </div>
 

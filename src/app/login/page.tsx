@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { isBiometricAvailable, authenticateWithBiometric, isBiometricEnabled } from '@/lib/biometric'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -10,8 +11,62 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    checkBiometric()
+  }, [])
+
+  const checkBiometric = async () => {
+    const available = await isBiometricAvailable()
+    const enabled = isBiometricEnabled()
+    setBiometricAvailable(available)
+    setBiometricEnabled(enabled)
+
+    // Auto-attempt biometric login if enabled
+    if (available && enabled) {
+      handleBiometricLogin()
+    }
+  }
+
+  const handleBiometricLogin = async () => {
+    setIsLoading(true)
+    setError('')
+
+    try {
+      const authenticated = await authenticateWithBiometric()
+      
+      if (authenticated) {
+        // Get stored user credentials
+        const userId = localStorage.getItem('biometric_user_id')
+        const storedEmail = localStorage.getItem('biometric_email')
+        
+        if (userId && storedEmail) {
+          // Check if session exists
+          const { data: { session } } = await supabase.auth.getSession()
+          
+          if (session) {
+            router.push('/dashboard')
+            router.refresh()
+            return
+          } else {
+            setError('Please sign in with your password to re-enable Face ID')
+            setBiometricEnabled(false)
+          }
+        }
+      } else {
+        setError('Face ID authentication failed')
+      }
+    } catch (err) {
+      console.error('Biometric login error:', err)
+      setError('Face ID authentication failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,6 +85,9 @@ export default function LoginPage() {
       }
 
       if (data.user) {
+        // Store email for biometric
+        localStorage.setItem('biometric_email', email)
+        
         router.push('/dashboard')
         router.refresh()
       }
@@ -47,6 +105,31 @@ export default function LoginPage() {
           Welcome to TINNY
         </h1>
         <p className="text-center text-gray-600 mb-6">Sign in to your account</p>
+
+        {/* Biometric Login Button */}
+        {biometricAvailable && biometricEnabled && (
+          <button
+            onClick={handleBiometricLogin}
+            disabled={isLoading}
+            className="w-full mb-4 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+            </svg>
+            <span>Sign in with Face ID</span>
+          </button>
+        )}
+
+        {biometricAvailable && biometricEnabled && (
+          <div className="relative mb-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
