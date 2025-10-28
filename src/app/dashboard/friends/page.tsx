@@ -1,434 +1,336 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import UserMenu from '@/components/UserMenu'
-
-interface Friend {
-  id: string
-  friend_id: string
-  status: string
-  profiles: {
-    id: string
-    email: string
-    full_name: string
-    username: string
-  }
-}
-
-interface FriendRequest {
-  id: string
-  user_id: string
-  status: string
-  profiles: {
-    id: string
-    email: string
-    full_name: string
-    username: string
-  }
-}
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 export default function FriendsPage() {
-  const [friends, setFriends] = useState<Friend[]>([])
-  const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([])
-  const [sentRequests, setSentRequests] = useState<Friend[]>([])
-  const [searchValue, setSearchValue] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResult, setSearchResult] = useState<any>(null)
+  const [canInvite, setCanInvite] = useState(false)
+  const [invitePhone, setInvitePhone] = useState('')
+  const [friends, setFriends] = useState<any[]>([])
+  const [sentRequests, setSentRequests] = useState<any[]>([])
+  const [receivedRequests, setReceivedRequests] = useState<any[]>([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [inviteLink, setInviteLink] = useState('')
-  const [showInviteModal, setShowInviteModal] = useState(false)
+  const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
     fetchFriends()
-    fetchPendingRequests()
-    fetchSentRequests()
   }, [])
 
   const fetchFriends = async () => {
-    try {
-      const response = await fetch('/api/friends')
-      const data = await response.json()
-      if (data.success) {
-        setFriends(data.friends || [])
-      }
-    } catch (error) {
-      console.error('Error fetching friends:', error)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const response = await fetch('/api/friends')
+    const data = await response.json()
+    if (data.success) {
+      setFriends(data.friends || [])
+      setSentRequests(data.sentRequests || [])
+      setReceivedRequests(data.receivedRequests || [])
     }
   }
 
-  const fetchPendingRequests = async () => {
-    try {
-      const response = await fetch('/api/friends/requests')
-      const data = await response.json()
-      if (data.success) {
-        setPendingRequests(data.requests || [])
-      }
-    } catch (error) {
-      console.error('Error fetching requests:', error)
-    }
-  }
-
-  const fetchSentRequests = async () => {
-    try {
-      const response = await fetch('/api/friends/sent')
-      const data = await response.json()
-      if (data.success) {
-        setSentRequests(data.requests || [])
-      }
-    } catch (error) {
-      console.error('Error fetching sent requests:', error)
-    }
-  }
-
-  const handleSendRequest = async (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    setMessage('')
+    setSearchResult(null)
+    setCanInvite(false)
+    setInvitePhone('')
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/friends/request', {
+      const response = await fetch('/api/friends/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchValue })
+        body: JSON.stringify({ query: searchQuery })
       })
 
       const data = await response.json()
 
-      if (data.success) {
-        setSearchValue('')
-        setShowAddForm(false)
-        fetchSentRequests()
-        alert('Friend request sent!')
+      if (response.ok) {
+        setSearchResult(data.user)
+        if (data.alreadyFriends) {
+          setMessage('Already friends with this user')
+        } else if (data.pendingRequest) {
+          setMessage('Friend request pending')
+        }
       } else {
-        if (data.error === 'User not found' && isEmail(searchValue)) {
-          const inviteConfirm = confirm(`User not found. Would you like to send them an invite to join TINNY?`)
-          if (inviteConfirm) {
-            handleSendInvite()
-          }
+        if (data.canInvite) {
+          setCanInvite(true)
+          setInvitePhone(data.phone)
+          setMessage('User not found. Would you like to invite them?')
         } else {
-          alert(data.error || 'Failed to send request')
+          setError(data.error || 'User not found')
         }
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error sending request')
+    } catch (err) {
+      setError('Failed to search')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleSendInvite = async () => {
+    setIsLoading(true)
     try {
-      const response = await fetch('/api/friends/invite', {
+      const response = await fetch('/api/friends/invite-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: isEmail(searchValue) ? searchValue : null,
-          phone: isPhoneNumber(searchValue) ? searchValue : null
-        })
+        body: JSON.stringify({ phone: invitePhone })
       })
 
       const data = await response.json()
 
-      if (data.success) {
-        setInviteLink(data.inviteLink)
-        setShowInviteModal(true)
-        setSearchValue('')
-        setShowAddForm(false)
+      if (response.ok) {
+        // Open SMS app with pre-filled message
+        if (data.smsLink) {
+          window.location.href = data.smsLink
+        }
+        setMessage('Opening SMS to send invite...')
       } else {
-        alert('Failed to create invite')
+        setError('Failed to create invite')
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error creating invite')
+    } catch (err) {
+      setError('Failed to send invite')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const isEmail = (value: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-  }
+  const handleSendRequest = async () => {
+    if (!searchResult) return
 
-  const isPhoneNumber = (value: string) => {
-    return /^\+?[\d\s-()]+$/.test(value) && value.replace(/\D/g, '').length >= 10
-  }
-
-  const copyInviteLink = () => {
-    navigator.clipboard.writeText(inviteLink)
-    alert('Invite link copied to clipboard!')
-  }
-
-  const handleAcceptRequest = async (requestId: string) => {
+    setIsLoading(true)
     try {
-      const response = await fetch('/api/friends/accept', {
+      const response = await fetch('/api/friends/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({ friendId: searchResult.id })
       })
 
-      const data = await response.json()
-
-      if (data.success) {
+      if (response.ok) {
+        setMessage('Friend request sent!')
+        setSearchResult(null)
+        setSearchQuery('')
         fetchFriends()
-        fetchPendingRequests()
-        alert('Friend request accepted!')
       } else {
-        alert('Failed to accept request')
+        setError('Failed to send request')
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error accepting request')
+    } catch (err) {
+      setError('Failed to send request')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleDeclineRequest = async (requestId: string) => {
+  const handleRespondToRequest = async (requestId: string, action: 'accept' | 'decline') => {
+    setIsLoading(true)
     try {
-      const response = await fetch('/api/friends/decline', {
+      const response = await fetch('/api/friends/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({ requestId, action })
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        fetchPendingRequests()
-        alert('Friend request declined')
+      if (response.ok) {
+        setMessage(`Friend request ${action}ed!`)
+        fetchFriends()
       } else {
-        alert('Failed to decline request')
+        setError('Failed to respond to request')
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error declining request')
+    } catch (err) {
+      setError('Failed to respond')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleRemoveFriend = async (friendshipId: string) => {
+  const handleRemoveFriend = async (friendId: string) => {
     if (!confirm('Are you sure you want to remove this friend?')) return
 
+    setIsLoading(true)
     try {
       const response = await fetch('/api/friends/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ friendshipId })
+        body: JSON.stringify({ friendId })
       })
 
-      const data = await response.json()
-
-      if (data.success) {
+      if (response.ok) {
+        setMessage('Friend removed')
         fetchFriends()
-        alert('Friend removed')
       } else {
-        alert('Failed to remove friend')
+        setError('Failed to remove friend')
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error removing friend')
+    } catch (err) {
+      setError('Failed to remove friend')
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">TINNY</h1>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
-            >
-              + Add Friend
-            </button>
-            <UserMenu />
-          </div>
+          <a href="/dashboard" className="text-blue-600 hover:text-blue-700 font-medium">
+            ← Back to Calendar
+          </a>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3">Navigation</h2>
-              <nav className="space-y-2">
-                <a href="/dashboard" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Calendar
-                </a>
-                <a href="/dashboard/friends" className="block px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium">
-                  Friends
-                </a>
-                <a href="/dashboard/groups" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Groups
-                </a>
-                <a href="/dashboard/settings" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Settings
-                </a>
-              </nav>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">Friends</h2>
+
+        {message && (
+          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Add Friend</h3>
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Search by username, email, or phone number
+              </label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="@username, email, or (555) 123-4567"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Tip: You can search by phone number to invite non-users!
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Searching...' : 'Search'}
+            </button>
+          </form>
+
+          {searchResult && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {searchResult.full_name || searchResult.username || 'User'}
+                  </p>
+                  <p className="text-sm text-gray-600">@{searchResult.username}</p>
+                  {searchResult.phone_number && (
+                    <p className="text-xs text-gray-500">{searchResult.phone_number}</p>
+                  )}
+                </div>
+                <button
+                  onClick={handleSendRequest}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Add Friend
+                </button>
+              </div>
+            </div>
+          )}
+
+          {canInvite && (
+            <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-gray-700 mb-3">
+                📱 This phone number isn't registered yet. Send them an invite to join TINNY!
+              </p>
+              <button
+                onClick={handleSendInvite}
+                disabled={isLoading}
+                className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 font-semibold"
+              >
+                📨 Send SMS Invite
+              </button>
+            </div>
+          )}
+        </div>
+
+        {receivedRequests.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Friend Requests</h3>
+            <div className="space-y-3">
+              {receivedRequests.map((request) => (
+                <div key={request.id} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {request.profiles?.full_name || request.profiles?.username || 'User'}
+                    </p>
+                    <p className="text-sm text-gray-600">@{request.profiles?.username}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleRespondToRequest(request.id, 'accept')}
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleRespondToRequest(request.id, 'decline')}
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Friends Content */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Add Friend Form */}
-            {showAddForm && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Add Friend</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                  Enter email, phone number, or @username
-                </p>
-                <form onSubmit={handleSendRequest} className="flex gap-4">
-                  <input
-                    type="text"
-                    value={searchValue}
-                    onChange={(e) => setSearchValue(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="email@example.com, +1234567890, or @username"
-                    required
-                  />
+        {friends.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">My Friends ({friends.length})</h3>
+            <div className="space-y-2">
+              {friends.map((friend) => (
+                <div key={friend.friend_id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {friend.profiles?.full_name || friend.profiles?.username || 'User'}
+                    </p>
+                    <p className="text-sm text-gray-600">@{friend.profiles?.username}</p>
+                  </div>
                   <button
-                    type="submit"
+                    onClick={() => handleRemoveFriend(friend.friend_id)}
                     disabled={isLoading}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                    className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
                   >
-                    {isLoading ? 'Sending...' : 'Send Request'}
+                    Remove
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddForm(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* Pending Requests */}
-            {pendingRequests.length > 0 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Friend Requests ({pendingRequests.length})
-                </h2>
-                <div className="space-y-4">
-                  {pendingRequests.map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {request.profiles?.full_name || 'Unknown User'}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          @{request.profiles?.username || request.profiles?.email}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleAcceptRequest(request.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => handleDeclineRequest(request.id)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              </div>
-            )}
-
-            {/* Sent Requests */}
-            {sentRequests.length > 0 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Sent Requests ({sentRequests.length})
-                </h2>
-                <div className="space-y-4">
-                  {sentRequests.map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {request.profiles?.full_name || 'Unknown User'}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          @{request.profiles?.username || request.profiles?.email}
-                        </p>
-                      </div>
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
-                        Pending
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Friends List */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                My Friends ({friends.length})
-              </h2>
-              {friends.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  No friends yet. Add friends to share your calendar!
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {friends.map((friend) => (
-                    <div key={friend.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {friend.profiles?.full_name || 'Unknown User'}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          @{friend.profiles?.username || friend.profiles?.email}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveFriend(friend.id)}
-                        className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              ))}
             </div>
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Invite Link Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Invite Link Created!</h2>
-            <p className="text-gray-600 mb-4">
-              Share this link with your friend to invite them to TINNY:
-            </p>
-            <div className="bg-gray-100 p-3 rounded-lg mb-4 break-all">
-              <code className="text-sm">{inviteLink}</code>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={copyInviteLink}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Copy Link
-              </button>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,12 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type = requestUrl.searchParams.get('type')
+  const next = requestUrl.searchParams.get('next') || '/dashboard'
 
-  if (code) {
+  if (token_hash && type) {
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,8 +28,16 @@ export async function GET(request: Request) {
       }
     )
 
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.verifyOtp({
+      type: type as any,
+      token_hash,
+    })
+
+    if (!error) {
+      return NextResponse.redirect(new URL(next, request.url))
+    }
   }
 
-  return NextResponse.redirect(new URL('/dashboard', request.url))
+  // Redirect to error page if verification failed
+  return NextResponse.redirect(new URL('/login?error=verification_failed', request.url))
 }

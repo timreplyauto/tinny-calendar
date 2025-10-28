@@ -37,29 +37,45 @@ export async function POST(request: NextRequest) {
 
     const searchQuery = query.trim().toLowerCase()
 
-    // Search by username (without @), email, or phone
     let foundUser = null
 
     // Remove @ if present
     const cleanQuery = searchQuery.startsWith('@') ? searchQuery.slice(1) : searchQuery
 
-    // Search by username first (case-insensitive)
-    const { data: byUsername } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, username')
-      .ilike('username', cleanQuery)
-      .neq('id', user.id)
-      .single()
+    // Check if it's a phone number
+    const phoneDigits = cleanQuery.replace(/\D/g, '')
+    if (phoneDigits.length === 10) {
+      const { data: byPhone } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, username, phone_number')
+        .eq('phone_number', `+1${phoneDigits}`)
+        .neq('id', user.id)
+        .single()
 
-    if (byUsername) {
-      foundUser = byUsername
+      if (byPhone) {
+        foundUser = byPhone
+      }
     }
 
-    // If not found, search by email (case-insensitive)
+    // Search by username if not found by phone
+    if (!foundUser) {
+      const { data: byUsername } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, username, phone_number')
+        .ilike('username', cleanQuery)
+        .neq('id', user.id)
+        .single()
+
+      if (byUsername) {
+        foundUser = byUsername
+      }
+    }
+
+    // Search by email
     if (!foundUser) {
       const { data: byEmail } = await supabase
         .from('profiles')
-        .select('id, email, full_name, username')
+        .select('id, email, full_name, username, phone_number')
         .ilike('email', cleanQuery)
         .neq('id', user.id)
         .single()
@@ -69,11 +85,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If not found, search by full name (partial match, case-insensitive)
+    // Search by name
     if (!foundUser) {
       const { data: byName } = await supabase
         .from('profiles')
-        .select('id, email, full_name, username')
+        .select('id, email, full_name, username, phone_number')
         .ilike('full_name', `%${cleanQuery}%`)
         .neq('id', user.id)
         .limit(1)
@@ -85,6 +101,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!foundUser) {
+      // Check if phone number is valid but user doesn't exist
+      if (phoneDigits.length === 10) {
+        return NextResponse.json({
+          error: 'User not found',
+          canInvite: true,
+          phone: `+1${phoneDigits}`
+        }, { status: 404 })
+      }
+      
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
