@@ -1,59 +1,79 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import UserMenu from '@/components/UserMenu'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 export default function SettingsPage() {
-  const router = useRouter()
+  const [profile, setProfile] = useState<any>(null)
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [profileImage, setProfileImage] = useState<File | null>(null)
+  const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
     fetchProfile()
   }, [])
 
   const fetchProfile = async () => {
-    try {
-      const response = await fetch('/api/profile')
-      const data = await response.json()
-      if (data.success) {
-        setFullName(data.profile.full_name || '')
-        setUsername(data.profile.username || '')
-        setEmail(data.profile.email || '')
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (data) {
+      setProfile(data)
+      setFullName(data.full_name || '')
+      setUsername(data.username || '')
     }
   }
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    setMessage('')
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, username })
-      })
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('Profile updated successfully!')
-      } else {
-        alert(data.error || 'Failed to update profile')
+      if (username && !/^[a-z0-9_]{3,30}$/.test(username)) {
+        setError('Username must be 3-30 characters (lowercase letters, numbers, underscore)')
+        setIsLoading(false)
+        return
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error updating profile')
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          username: username.toLowerCase(),
+        })
+        .eq('id', user.id)
+
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage('Profile updated successfully!')
+        fetchProfile()
+      }
+    } catch (err) {
+      setError('Failed to update profile')
     } finally {
       setIsLoading(false)
     }
@@ -61,234 +81,250 @@ export default function SettingsPage() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (newPassword !== confirmPassword) {
-      alert('New passwords do not match')
-      return
-    }
-
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters')
-      return
-    }
-
+    setError('')
+    setMessage('')
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/profile/password', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword })
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('Password changed successfully!')
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage('Password changed successfully!')
         setCurrentPassword('')
         setNewPassword('')
-        setConfirmPassword('')
-      } else {
-        alert(data.error || 'Failed to change password')
       }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error changing password')
+    } catch (err) {
+      setError('Failed to change password')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleDeleteAccount = async () => {
-    const confirmed = confirm(
-      'Are you sure you want to delete your account? This action cannot be undone and will delete all your events, friends, and data.'
-    )
-
-    if (!confirmed) return
-
-    const doubleConfirm = prompt('Type "DELETE" to confirm account deletion')
-
-    if (doubleConfirm !== 'DELETE') {
-      alert('Account deletion cancelled')
+    if (!confirm('Are you sure you want to delete your account? This cannot be undone.')) {
       return
     }
 
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/profile', {
-        method: 'DELETE'
-      })
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert('Account deleted successfully')
-        router.push('/login')
-      } else {
-        alert(data.error || 'Failed to delete account')
-      }
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error deleting account')
-    } finally {
+      await supabase.from('profiles').delete().eq('id', user.id)
+      await supabase.auth.signOut()
+      router.push('/')
+    } catch (err) {
+      setError('Failed to delete account')
       setIsLoading(false)
     }
   }
 
+  const handleConnectGoogle = async () => {
+    setMessage('Google Calendar integration coming soon!')
+    // TODO: Implement Google Calendar OAuth
+    // window.location.href = '/api/calendar/connect/google'
+  }
+
+  const handleConnectApple = async () => {
+    setMessage('Apple Calendar integration coming soon!')
+    // TODO: Implement Apple Calendar OAuth  
+    // window.location.href = '/api/calendar/connect/apple'
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">TINNY</h1>
-          <UserMenu />
+          
+            href="/dashboard"
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            ← Back to Calendar
+          </a>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-900 mb-3">Navigation</h2>
-              <nav className="space-y-2">
-                <a href="/dashboard" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Calendar
-                </a>
-                <a href="/dashboard/friends" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Friends
-                </a>
-                <a href="/dashboard/groups" className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg">
-                  Groups
-                </a>
-                <a href="/dashboard/settings" className="block px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium">
-                  Settings
-                </a>
-              </nav>
-            </div>
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">Settings</h2>
+
+        {message && (
+          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {message}
           </div>
+        )}
 
-          {/* Settings Content */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Profile Settings */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Profile Settings</h2>
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="John Doe"
-                  />
-                </div>
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                  <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
-                      @
-                    </span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="johndoe"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Your username is used to let friends find you. Only lowercase letters, numbers, and underscores.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {isLoading ? 'Saving...' : 'Save Profile'}
-                </button>
-              </form>
+        {/* Profile Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Profile Information</h3>
+          <form onSubmit={handleUpdateProfile} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={profile?.email || ''}
+                disabled
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
+              />
+              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
             </div>
 
-            {/* Password Settings */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Change Password</h2>
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {isLoading ? 'Changing...' : 'Change Password'}
-                </button>
-              </form>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="John Doe"
+              />
             </div>
 
-            {/* Danger Zone */}
-            <div className="bg-white rounded-lg shadow p-6 border-2 border-red-200">
-              <h2 className="text-xl font-bold text-red-600 mb-4">Danger Zone</h2>
-              <p className="text-gray-600 mb-4">
-                Once you delete your account, there is no going back. This will permanently delete all your events, friends, and data.
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="johndoe"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                3-30 characters, lowercase letters, numbers, and underscores only
               </p>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={isLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
-              >
-                Delete Account
-              </button>
             </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </form>
+        </div>
+
+        {/* Calendar Integration Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Calendar Integration</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Sync your events with Google Calendar and Apple Calendar
+          </p>
+
+          <div className="space-y-3">
+            <button
+              onClick={handleConnectGoogle}
+              className="w-full flex items-center justify-between px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mr-3 shadow-sm">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Google Calendar</p>
+                  <p className="text-xs text-gray-500">Two-way sync with Google</p>
+                </div>
+              </div>
+              <span className="text-blue-600 font-medium">Connect</span>
+            </button>
+
+            <button
+              onClick={handleConnectApple}
+              className="w-full flex items-center justify-between px-4 py-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center mr-3">
+                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Apple Calendar</p>
+                  <p className="text-xs text-gray-500">Sync with iCloud Calendar</p>
+                </div>
+              </div>
+              <span className="text-blue-600 font-medium">Connect</span>
+            </button>
           </div>
+
+          <p className="text-xs text-gray-500 mt-4">
+            💡 Calendar integration is coming soon! This will allow you to sync events between TINNY and your other calendars.
+          </p>
+        </div>
+
+        {/* Change Password Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Change Password</h3>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 pr-10"
+                  placeholder="••••••••"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showNewPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Changing...' : 'Change Password'}
+            </button>
+          </form>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-white rounded-lg shadow p-6 border-2 border-red-200">
+          <h3 className="text-xl font-semibold text-red-600 mb-4">Danger Zone</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Once you delete your account, there is no going back. Please be certain.
+          </p>
+          <button
+            onClick={handleDeleteAccount}
+            disabled={isLoading}
+            className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
+          >
+            Delete Account
+          </button>
         </div>
       </div>
     </div>
