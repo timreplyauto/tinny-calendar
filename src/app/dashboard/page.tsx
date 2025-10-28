@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import EventModal from '@/components/calendar/EventModal'
 import SmartAIModal from '@/components/SmartAIModal'
 
@@ -27,6 +29,7 @@ interface Friend {
 export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [friends, setFriends] = useState<Friend[]>([])
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -37,11 +40,27 @@ export default function DashboardPage() {
   
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  
+  const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
+    fetchUserProfile()
     fetchEvents()
     fetchFriends()
   }, [selectedFriendId])
+
+  const fetchUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      setUserProfile(data)
+    }
+  }
 
   const fetchEvents = async () => {
     try {
@@ -70,6 +89,14 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Error fetching friends:', error)
+    }
+  }
+
+  const handleSignOut = async () => {
+    if (confirm('Are you sure you want to sign out?')) {
+      await supabase.auth.signOut()
+      router.push('/login')
+      router.refresh()
     }
   }
 
@@ -253,20 +280,35 @@ export default function DashboardPage() {
           onClick={() => setShowSidebar(false)}
         >
           <div 
-            className="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-xl"
+            className="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Menu</h2>
-                <button
-                  onClick={() => setShowSidebar(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+              {/* User Profile Section */}
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                      {userProfile?.full_name?.[0] || userProfile?.email?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {userProfile?.full_name || 'User'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        @{userProfile?.username || 'user'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSidebar(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               <nav className="space-y-2 mb-6">
@@ -284,7 +326,7 @@ export default function DashboardPage() {
                 </a>
               </nav>
 
-              <div className="border-t border-gray-200 pt-4">
+              <div className="border-t border-gray-200 pt-4 mb-6">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2 px-4">Calendars</h3>
                 <button
                   onClick={() => {
@@ -318,6 +360,14 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* Sign Out Button */}
+              <button
+                onClick={handleSignOut}
+                className="w-full px-4 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 active:bg-red-200"
+              >
+                🚪 Sign Out
+              </button>
             </div>
           </div>
         </div>
@@ -336,7 +386,7 @@ export default function DashboardPage() {
               </div>
             ))}
             
-            {/* Calendar days - BIGGER CELLS */}
+            {/* Calendar days */}
             {Array.from({ length: totalCells }, (_, i) => {
               const day = i - firstDay + 1;
               const isValidDay = day > 0 && day <= daysInMonth

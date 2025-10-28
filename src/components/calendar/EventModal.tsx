@@ -21,26 +21,32 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (existingEvent) {
-      setTitle(existingEvent.title || '')
-      setDescription(existingEvent.description || '')
-      setLocation(existingEvent.location || '')
-      
-      const start = new Date(existingEvent.start_time)
-      const end = new Date(existingEvent.end_time)
-      
-      setStartDate(start.toISOString().split('T')[0])
-      setStartTime(start.toTimeString().slice(0, 5))
-      setEndTime(end.toTimeString().slice(0, 5))
-    } else if (selectedDate) {
-      setStartDate(selectedDate.toISOString().split('T')[0])
-      setStartTime('09:00')
-      setEndTime('10:00')
+    if (isOpen) {
+      if (existingEvent) {
+        setTitle(existingEvent.title || '')
+        setDescription(existingEvent.description || '')
+        setLocation(existingEvent.location || '')
+        
+        const start = new Date(existingEvent.start_time)
+        const end = new Date(existingEvent.end_time)
+        
+        setStartDate(start.toISOString().split('T')[0])
+        setStartTime(start.toTimeString().slice(0, 5))
+        setEndTime(end.toTimeString().slice(0, 5))
+      } else if (selectedDate) {
+        setTitle('')
+        setDescription('')
+        setLocation('')
+        setStartDate(selectedDate.toISOString().split('T')[0])
+        setStartTime('09:00')
+        setEndTime('10:00')
+      }
     }
   }, [existingEvent, selectedDate, isOpen])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
+    if (!title.trim()) return
+    
     setError('')
     setIsLoading(true)
 
@@ -119,11 +125,13 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
 
   if (!isOpen) return null
 
+  const canSave = title.trim().length > 0 && !isLoading
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center sm:justify-center">
       <div className="bg-white w-full sm:max-w-lg sm:rounded-t-3xl rounded-t-3xl max-h-[90vh] overflow-y-auto">
         {/* iOS-style Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
           <button
             onClick={handleClose}
             className="text-blue-600 font-semibold text-base min-w-[60px] min-h-[44px] flex items-center justify-start"
@@ -135,14 +143,16 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
           </h2>
           <button
             onClick={handleSubmit}
-            disabled={isLoading || !title.trim()}
-            className="text-blue-600 font-semibold text-base disabled:text-gray-400 min-w-[60px] min-h-[44px] flex items-center justify-end"
+            disabled={!canSave}
+            className={`font-semibold text-base min-w-[60px] min-h-[44px] flex items-center justify-end ${
+              canSave ? 'text-blue-600' : 'text-gray-400'
+            }`}
           >
             {isLoading ? 'Saving...' : 'Done'}
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <div className="p-4 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
               {error}
@@ -157,7 +167,6 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-4 py-3 text-lg border-0 border-b border-gray-200 focus:outline-none focus:border-blue-500"
               placeholder="Event Title"
-              required
             />
           </div>
 
@@ -169,7 +178,6 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
-              required
             />
           </div>
 
@@ -182,7 +190,6 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
-                required
               />
             </div>
             <div>
@@ -192,7 +199,6 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
-                required
               />
             </div>
           </div>
@@ -232,7 +238,7 @@ export default function EventModal({ isOpen, onClose, onEventCreated, selectedDa
               Delete Event
             </button>
           )}
-        </form>
+        </div>
 
         {/* Safe area spacing for iPhone */}
         <div className="h-8" />
